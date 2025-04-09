@@ -30,6 +30,7 @@ This repository hosts the source code for the LokaTrack IoT project. This projec
   - [TinyGPS++](https://github.com/mikalhart/TinyGPSPlus?utm_source=platformio&utm_medium=piohome) (for GPS data parsing).
   - [TinyGSM](https://github.com/vshymanskyy/TinyGSM?utm_source=platformio&utm_medium=piohome) (for GSM communication).
   - [ArduinoJSON](https://github.com/bblanchon/ArduinoJson.git?utm_source=platformio&utm_medium=piohome) (for JSON data handling).
+  - [AsyncMQTTClient](https://github.com/marvinroger/async-mqtt-client?utm_source=platformio&utm_medium=piohome) (for MQTT communication).
 
 ## Installation
 

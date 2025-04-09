@@ -11,6 +11,11 @@
     "format": "cpp",
     "initializer_list": "cpp",
     "span": "cpp",
-    "*.tpp": "cpp"
+    "*.tpp": "cpp",
+    "functional": "cpp",
+    "platform.h": "c",
+    "debug.h": "c",
+    "entropy.h": "c",
+    "ssl.h": "c"
   }
 }
