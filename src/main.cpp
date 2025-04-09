@@ -8,6 +8,7 @@ TinyGPSPlus gps;
 HardwareSerial gpsSerial(2);
 AsyncMqttClient mqttClient;
 
+void onMqttConnect(bool sessionPresent);
 void connectWifi();
 
 void setup()
@@ -35,6 +36,22 @@ void setup()
   Serial.println("Success!");
 
   connectWifi();
+
+  Serial.print("Initializing MQTT client...");
+  try
+  {
+    mqttClient.onConnect(onMqttConnect);
+    mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  }
+  catch (const std::exception &e)
+  {
+    Serial.println("Failed!");
+    Serial.println(e.what());
+  }
+  Serial.println("Success!");
+
+  Serial.print("Connecting to MQTT broker...");
+  mqttClient.connect();
 }
 
 void loop()
@@ -64,6 +81,11 @@ void loop()
   Serial.println(gps.satellites.value());
 
   delay(1000);
+}
+
+void onMqttConnect(bool sessionPresent)
+{
+  Serial.println("Success!");
 }
 
 void connectWifi()
