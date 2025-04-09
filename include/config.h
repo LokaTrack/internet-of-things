@@ -11,4 +11,14 @@
 #define GSM_TX_PIN 33 // Connect to RX of SIM800L module
 #define GSM_BAUD 9600
 
+// MQTT Broker settings
+#define MQTT_BROKER "u7015b42.ala.asia-southeast1.emqxsl.com"
+#define MQTT_PORT 8883
+#define MQTT_USERNAME "lokatrack-gps-1"
+#define MQTT_PASSWORD "lokatrack"
+
+// WiFi settings
+#define WIFI_SSID "QUEENFAM"
+#define WIFI_PASSWORD "Q15062009"
+
 #endif

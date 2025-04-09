@@ -1,27 +1,40 @@
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
+#include <AsyncMqttClient.h>
+#include <WiFi.h>
 #include "config.h"
 
-// Create a TinyGPS++ object
 TinyGPSPlus gps;
+HardwareSerial gpsSerial(2);
+AsyncMqttClient mqttClient;
 
-// Using Hardware Serial 2 for GPS communication
-HardwareSerial gpsSerial(2); // UART 2
+void connectWifi();
 
 void setup()
 {
   // Initialize Serial Monitor
   Serial.begin(9600);
+  Serial.print("Initializing Serial Monitor...");
   while (!Serial)
   {
     ; // Wait for serial port to connect
   }
+  Serial.println("Success!");
 
   // Initialize GPS module on Serial2
-  gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+  Serial.print("Initializing GPS Serial...");
+  try
+  {
+    gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+  }
+  catch (const std::exception &e)
+  {
+    Serial.println("Failed!");
+    Serial.println(e.what());
+  }
+  Serial.println("Success!");
 
-  Serial.println("ESP32 GPS Neo6M Initialization");
-  Serial.println("GPS Serial started at 9600 baud rate");
+  connectWifi();
 }
 
 void loop()
@@ -51,4 +64,16 @@ void loop()
   Serial.println(gps.satellites.value());
 
   delay(1000);
+}
+
+void connectWifi()
+{
+  Serial.print("Connecting to WiFi...");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println("Success!");
 }
