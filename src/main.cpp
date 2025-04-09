@@ -18,7 +18,7 @@ void setup()
   }
 
   // Initialize GPS module on Serial2
-  gpsSerial.begin(GPS_BAUD, SERIAL_8N1, RX_PIN, TX_PIN);
+  gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
   Serial.println("ESP32 GPS Neo6M Initialization");
   Serial.println("GPS Serial started at 9600 baud rate");
