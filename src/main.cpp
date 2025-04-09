@@ -8,6 +8,9 @@ TinyGPSPlus gps;
 HardwareSerial gpsSerial(2);
 AsyncMqttClient mqttClient;
 
+uint32_t lastPublishTime = 0;
+
+void publishGpsData();
 void onMqttConnect(bool sessionPresent);
 void connectWifi();
 
@@ -15,6 +18,7 @@ void setup()
 {
   // Initialize Serial Monitor
   Serial.begin(9600);
+  Serial.println();
   Serial.print("Initializing Serial Monitor...");
   while (!Serial)
   {
@@ -52,35 +56,65 @@ void setup()
 
   Serial.print("Connecting to MQTT broker...");
   mqttClient.connect();
+  while (!mqttClient.connected())
+  {
+    delay(1000);
+  }
 }
 
 void loop()
 {
-  // Read data from GPS module and feed it to TinyGPS++ library
+  if (!mqttClient.connected())
+  {
+    Serial.println("Reconnecting to MQTT broker...");
+    mqttClient.connect();
+    return;
+  }
+
+  if (millis() - lastPublishTime < 5000)
+  {
+    return;
+  }
+
   while (gpsSerial.available() > 0)
   {
     gps.encode(gpsSerial.read());
   }
 
-  // Display GPS status and data every second
-  Serial.println("-------------------------------");
+  publishGpsData();
 
+  // Serial.print("Satellites: ");
+  // Serial.println(gps.satellites.value());
+  // lastPublishTime = millis();
+
+  delay(1000);
+}
+
+void publishGpsData()
+{
   if (gps.location.isValid())
   {
-    Serial.print("Location: ");
-    Serial.print(gps.location.lat(), 6);
-    Serial.print(", ");
-    Serial.println(gps.location.lng(), 6);
+    String payload = "{\"lat\": " + String(gps.location.lat(), 6) + ", \"long\": " + String(gps.location.lng(), 6) + "}";
+    mqttClient.publish(MQTT_TOPIC, 2, false, payload.c_str());
+    lastPublishTime = millis();
+    Serial.print("Published: ");
+    Serial.print(payload);
+    Serial.print(" - ");
+    Serial.print(lastPublishTime);
+    Serial.println("ms");
   }
   else
   {
-    Serial.println("Waiting for GPS fix...");
+    // Dummy payload to indicate no GPS fix
+    String payload = "{\"lat\": 0, \"long\": 0}";
+    mqttClient.publish(MQTT_TOPIC, 2, false, payload.c_str());
+    lastPublishTime = millis();
+    Serial.print("Published: ");
+    Serial.print(payload);
+    Serial.print(" - ");
+    Serial.print(lastPublishTime);
+    Serial.println("ms");
   }
-
-  Serial.print("Satellites: ");
-  Serial.println(gps.satellites.value());
-
-  delay(1000);
 }
 
 void onMqttConnect(bool sessionPresent)
