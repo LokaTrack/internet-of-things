@@ -1,12 +1,14 @@
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
-#include <AsyncMqttClient.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <PubSubClient.h>
 #include "config.h"
 
 TinyGPSPlus gps;
 HardwareSerial gpsSerial(2);
-AsyncMqttClient mqttClient;
+WiFiClientSecure wifiClient;
+PubSubClient mqttClient(wifiClient);
 
 uint32_t lastPublishTime = 0;
 
@@ -44,7 +46,7 @@ void setup()
   Serial.print("Initializing MQTT client...");
   try
   {
-    mqttClient.onConnect(onMqttConnect);
+    wifiClient.setInsecure();
     mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
   }
   catch (const std::exception &e)
@@ -55,11 +57,14 @@ void setup()
   Serial.println("Success!");
 
   Serial.print("Connecting to MQTT broker...");
-  mqttClient.connect();
+  mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
   while (!mqttClient.connected())
   {
+    mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
     delay(1000);
+    Serial.print(".");
   }
+  Serial.println("Success!");
 }
 
 void loop()
@@ -67,7 +72,7 @@ void loop()
   if (!mqttClient.connected())
   {
     Serial.println("Reconnecting to MQTT broker...");
-    mqttClient.connect();
+    mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
     return;
   }
 
@@ -95,7 +100,7 @@ void publishGpsData()
   if (gps.location.isValid())
   {
     String payload = "{\"lat\": " + String(gps.location.lat(), 6) + ", \"long\": " + String(gps.location.lng(), 6) + "}";
-    mqttClient.publish(MQTT_TOPIC, 2, false, payload.c_str());
+    mqttClient.publish(MQTT_TOPIC, payload.c_str());
     lastPublishTime = millis();
     Serial.print("Published: ");
     Serial.print(payload);
@@ -107,7 +112,7 @@ void publishGpsData()
   {
     // Dummy payload to indicate no GPS fix
     String payload = "{\"lat\": 0, \"long\": 0}";
-    mqttClient.publish(MQTT_TOPIC, 2, false, payload.c_str());
+    mqttClient.publish(MQTT_TOPIC, payload.c_str());
     lastPublishTime = millis();
     Serial.print("Published: ");
     Serial.print(payload);
