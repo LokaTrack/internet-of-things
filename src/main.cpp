@@ -11,10 +11,12 @@ WiFiClientSecure wifiClient;
 PubSubClient mqttClient(wifiClient);
 
 uint32_t lastPublishTime = 0;
+char macAddress[18];
 
 void publishGpsData();
 void onMqttConnect(bool sessionPresent);
 void connectWifi();
+void getMacAddress();
 
 void setup()
 {
@@ -42,6 +44,7 @@ void setup()
   Serial.println("Success!");
 
   connectWifi();
+  getMacAddress();
 
   Serial.print("Initializing MQTT client...");
   try
@@ -99,7 +102,7 @@ void publishGpsData()
 {
   if (gps.location.isValid())
   {
-    String payload = "{\"lat\": " + String(gps.location.lat(), 6) + ", \"long\": " + String(gps.location.lng(), 6) + "}";
+    String payload = "{\"id\": \"" + String(macAddress) + "\", \"lat\": " + String(gps.location.lat(), 6) + ", \"long\": " + String(gps.location.lng(), 6) + "}";
     mqttClient.publish(MQTT_TOPIC, payload.c_str());
     lastPublishTime = millis();
     Serial.print("Published: ");
@@ -111,7 +114,7 @@ void publishGpsData()
   else
   {
     // Dummy payload to indicate no GPS fix
-    String payload = "{\"lat\": 0, \"long\": 0}";
+    String payload = "{\"id\": \"" + String(macAddress) + "\", \"lat\": 0, \"long\": 0}";
     mqttClient.publish(MQTT_TOPIC, payload.c_str());
     lastPublishTime = millis();
     Serial.print("Published: ");
@@ -137,4 +140,13 @@ void connectWifi()
     Serial.print(".");
   }
   Serial.println("Success!");
+}
+
+void getMacAddress()
+{
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  snprintf(macAddress, sizeof(macAddress), "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  Serial.print("MAC Address: ");
+  Serial.println(macAddress);
 }
