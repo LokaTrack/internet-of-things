@@ -1,18 +1,33 @@
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
-#include <AsyncMqttClient.h>
+#include <PubSubClient.h>
 #include <WiFi.h>
 #include "config.h"
 
+// Only include WiFiClientSecure if MQTT_SSL is defined
+#ifdef MQTT_SSL
+#include <WiFiClientSecure.h>
+#endif
+
 TinyGPSPlus gps;
 HardwareSerial gpsSerial(2);
-AsyncMqttClient mqttClient;
+
+// Create either a secure or non-secure WiFi client based on MQTT_SSL
+#ifdef MQTT_SSL
+WiFiClientSecure wifiClient;
+#else
+WiFiClient wifiClient;
+#endif
+
+PubSubClient mqttClient(wifiClient);
 
 uint32_t lastPublishTime = 0;
+char macAddress[18];
 
 void publishGpsData();
 void onMqttConnect(bool sessionPresent);
 void connectWifi();
+void getMacAddress();
 
 void setup()
 {
@@ -40,11 +55,24 @@ void setup()
   Serial.println("Success!");
 
   connectWifi();
+  getMacAddress();
 
   Serial.print("Initializing MQTT client...");
+
   try
   {
-    mqttClient.onConnect(onMqttConnect);
+    // Configure SSL only if MQTT_SSL is defined
+#ifdef MQTT_SSL
+#ifdef MQTT_INSECURE
+    wifiClient.setInsecure(); // Skip certificate verification
+#else
+    wifiClient.setCACert(MQTT_CA_CERT); // Use CA certificate for verification
+#endif
+    Serial.println(" (using SSL)");
+#else
+    Serial.println(" (not using SSL)");
+#endif
+
     mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
   }
   catch (const std::exception &e)
@@ -55,11 +83,14 @@ void setup()
   Serial.println("Success!");
 
   Serial.print("Connecting to MQTT broker...");
-  mqttClient.connect();
+  mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
   while (!mqttClient.connected())
   {
+    mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
     delay(1000);
+    Serial.print(".");
   }
+  Serial.println("Success!");
 }
 
 void loop()
@@ -67,7 +98,7 @@ void loop()
   if (!mqttClient.connected())
   {
     Serial.println("Reconnecting to MQTT broker...");
-    mqttClient.connect();
+    mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
     return;
   }
 
@@ -94,8 +125,8 @@ void publishGpsData()
 {
   if (gps.location.isValid())
   {
-    String payload = "{\"lat\": " + String(gps.location.lat(), 6) + ", \"long\": " + String(gps.location.lng(), 6) + "}";
-    mqttClient.publish(MQTT_TOPIC, 2, false, payload.c_str());
+    String payload = "{\"id\": \"" + String(macAddress) + "\", \"lat\": " + String(gps.location.lat(), 6) + ", \"long\": " + String(gps.location.lng(), 6) + "}";
+    mqttClient.publish(MQTT_TOPIC, payload.c_str());
     lastPublishTime = millis();
     Serial.print("Published: ");
     Serial.print(payload);
@@ -106,8 +137,8 @@ void publishGpsData()
   else
   {
     // Dummy payload to indicate no GPS fix
-    String payload = "{\"lat\": 0, \"long\": 0}";
-    mqttClient.publish(MQTT_TOPIC, 2, false, payload.c_str());
+    String payload = "{\"id\": \"" + String(macAddress) + "\", \"lat\": 0, \"long\": 0}";
+    mqttClient.publish(MQTT_TOPIC, payload.c_str());
     lastPublishTime = millis();
     Serial.print("Published: ");
     Serial.print(payload);
@@ -132,4 +163,13 @@ void connectWifi()
     Serial.print(".");
   }
   Serial.println("Success!");
+}
+
+void getMacAddress()
+{
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  snprintf(macAddress, sizeof(macAddress), "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  Serial.print("MAC Address: ");
+  Serial.println(macAddress);
 }
