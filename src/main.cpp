@@ -1,13 +1,24 @@
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
+#include <WiFi.h>
 #include "config.h"
+
+// Only include WiFiClientSecure if MQTT_SSL is defined
+#ifdef MQTT_SSL
+#include <WiFiClientSecure.h>
+#endif
 
 TinyGPSPlus gps;
 HardwareSerial gpsSerial(2);
+
+// Create either a secure or non-secure WiFi client based on MQTT_SSL
+#ifdef MQTT_SSL
 WiFiClientSecure wifiClient;
+#else
+WiFiClient wifiClient;
+#endif
+
 PubSubClient mqttClient(wifiClient);
 
 uint32_t lastPublishTime = 0;
@@ -47,9 +58,21 @@ void setup()
   getMacAddress();
 
   Serial.print("Initializing MQTT client...");
+
   try
   {
-    wifiClient.setInsecure();
+    // Configure SSL only if MQTT_SSL is defined
+#ifdef MQTT_SSL
+#ifdef MQTT_INSECURE
+    wifiClient.setInsecure(); // Skip certificate verification
+#else
+    wifiClient.setCACert(MQTT_CA_CERT); // Use CA certificate for verification
+#endif
+    Serial.println(" (using SSL)");
+#else
+    Serial.println(" (not using SSL)");
+#endif
+
     mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
   }
   catch (const std::exception &e)

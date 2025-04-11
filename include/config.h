@@ -18,7 +18,9 @@
 #define MQTT_CLIENT_ID "lokatrack-gps-1"
 #define MQTT_USERNAME "lokatrack-gps-1"
 #define MQTT_PASSWORD "lokatrack"
-#define MQTT_SECURE true
+#define MQTT_SSL
+#define MQTT_INSECURE
+
 const char MQTT_CA_CERT[] PROGMEM = R"EOF(
 -----BEGIN CERTIFICATE-----
 MIIDrzCCApegAwIBAgIQCDvgVpBCRrGhdWrJWZHHSjANBgkqhkiG9w0BAQUFADBh
