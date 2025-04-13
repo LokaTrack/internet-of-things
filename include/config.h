@@ -7,8 +7,9 @@
 #define GPS_BAUD 9600
 
 // SIM800L pins
-#define GSM_RX_PIN 32 // Connect to TX of SIM800L module
-#define GSM_TX_PIN 33 // Connect to RX of SIM800L module
+#define GSM_RX_PIN 32  // Connect to TX of SIM800L module
+#define GSM_TX_PIN 33  // Connect to RX of SIM800L module
+#define GSM_RST_PIN 12 // Connect to RST of SIM800L module
 #define GSM_BAUD 9600
 
 // MQTT Broker settings
