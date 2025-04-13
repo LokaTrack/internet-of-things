@@ -11,6 +11,9 @@
 #define GSM_TX_PIN 33  // Connect to RX of SIM800L module
 #define GSM_RST_PIN 12 // Connect to RST of SIM800L module
 #define GSM_BAUD 9600
+const char apn[] = "internet"; // Your carrier's APN
+const char user[] = "wap";     // APN username if needed
+const char pass[] = "123wap";  // APN password if needed
 
 // MQTT Broker settings
 #define MQTT_BROKER "u7015b42.ala.asia-southeast1.emqxsl.com"
