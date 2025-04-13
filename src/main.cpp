@@ -1,175 +1,74 @@
-#include <Arduino.h>
-#include <TinyGPSPlus.h>
-#include <PubSubClient.h>
-#include <WiFi.h>
-#include "config.h"
+#include <HardwareSerial.h>
 
-// Only include WiFiClientSecure if MQTT_SSL is defined
-#ifdef MQTT_SSL
-#include <WiFiClientSecure.h>
-#endif
+// Use the default Serial1 port on ESP32
+#define SIM800L_RX_PIN 32 // Connect to TX of SIM800L module
+#define SIM800L_TX_PIN 33 // Connect to RX of SIM800L module
 
-TinyGPSPlus gps;
-HardwareSerial gpsSerial(2);
+HardwareSerial SIM800L(1);
 
-// Create either a secure or non-secure WiFi client based on MQTT_SSL
-#ifdef MQTT_SSL
-WiFiClientSecure wifiClient;
-#else
-WiFiClient wifiClient;
-#endif
+void ShowSerialData();
+void sendCommand(const char *command);
+void sendGetRequest();
 
-PubSubClient mqttClient(wifiClient);
+// Function to send AT commands to the SIM800L
+void sendCommand(const char command)
+{
+  SIM800L.println(command);
+  ShowSerialData();
+}
 
-uint32_t lastPublishTime = 0;
-char macAddress[18];
+// Function to read and display serial data from the SIM800L
+void ShowSerialData()
+{
+  Serial.println("Show serial data:");
+  while (SIM800L.available())
+  {
+    char c = SIM800L.read();
+    Serial.write(c);
+  }
+  Serial.println("");
+  delay(1000);
+}
 
-void publishGpsData();
-void onMqttConnect(bool sessionPresent);
-void connectWifi();
-void getMacAddress();
+// Function to perform an HTTP GET request using the SIM800L
+void sendGetRequest()
+{
+  sendCommand("AT");
+  sendCommand("AT+CIPSHUT");
+  sendCommand("AT+SAPBR=0,1");
+  sendCommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"");
+  sendCommand("AT+SAPBR=3,1,\"APN\",\"internet\""); // Change APN to your network provider's
+  sendCommand("AT+SAPBR=1,1");
+  sendCommand("AT+HTTPINIT");
+  sendCommand("AT+HTTPPARA=\"CID\",1");
+  sendCommand("AT+HTTPPARA=\"URL\",\"http://example.com/\""); // Change URL to your desired server
+  sendCommand("AT+HTTPACTION=0");
+  delay(9000);
+  sendCommand("AT+HTTPREAD");
+  sendCommand("AT+HTTPTERM");
+  sendCommand("AT+CIPSHUT");
+  sendCommand("AT+SAPBR=0,1");
+}
 
 void setup()
 {
-  // Initialize Serial Monitor
+  // Start the Serial Monitor on USB
   Serial.begin(9600);
-  Serial.println();
-  Serial.print("Initializing Serial Monitor...");
-  while (!Serial)
-  {
-    ; // Wait for serial port to connect
-  }
-  Serial.println("Success!");
+  // Start the Hardware Serial for SIM800L
+  SIM800L.begin(9600, SERIAL_8N1, SIM800L_RX_PIN, SIM800L_TX_PIN);
 
-  // Initialize GPS module on Serial2
-  Serial.print("Initializing GPS Serial...");
-  try
-  {
-    gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
-  }
-  catch (const std::exception &e)
-  {
-    Serial.println("Failed!");
-    Serial.println(e.what());
-  }
-  Serial.println("Success!");
-
-  connectWifi();
-  getMacAddress();
-
-  Serial.print("Initializing MQTT client...");
-
-  try
-  {
-    // Configure SSL only if MQTT_SSL is defined
-#ifdef MQTT_SSL
-#ifdef MQTT_INSECURE
-    wifiClient.setInsecure(); // Skip certificate verification
-#else
-    wifiClient.setCACert(MQTT_CA_CERT); // Use CA certificate for verification
-#endif
-    Serial.println(" (using SSL)");
-#else
-    Serial.println(" (not using SSL)");
-#endif
-
-    mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
-  }
-  catch (const std::exception &e)
-  {
-    Serial.println("Failed!");
-    Serial.println(e.what());
-  }
-  Serial.println("Success!");
-
-  Serial.print("Connecting to MQTT broker...");
-  mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
-  while (!mqttClient.connected())
-  {
-    mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
-    delay(1000);
-    Serial.print(".");
-  }
-  Serial.println("Success!");
+  // Optionally, ensure the SIM800L is properly initialized and ready
+  delay(3000);      // Wait for SIM800L to initialize
+  sendGetRequest(); // Send the HTTP GET request
 }
 
 void loop()
 {
-  if (!mqttClient.connected())
+  // Keep reading incoming data from SIM800L if present
+  if (SIM800L.available())
   {
-    Serial.println("Reconnecting to MQTT broker...");
-    mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
-    return;
+    Serial.write(SIM800L.read());
   }
-
-  if (millis() - lastPublishTime < 5000)
-  {
-    return;
-  }
-
-  while (gpsSerial.available() > 0)
-  {
-    gps.encode(gpsSerial.read());
-  }
-
-  publishGpsData();
-
-  // Serial.print("Satellites: ");
-  // Serial.println(gps.satellites.value());
-  // lastPublishTime = millis();
-
-  delay(1000);
-}
-
-void publishGpsData()
-{
-  if (gps.location.isValid())
-  {
-    String payload = "{\"id\": \"" + String(macAddress) + "\", \"lat\": " + String(gps.location.lat(), 6) + ", \"long\": " + String(gps.location.lng(), 6) + "}";
-    mqttClient.publish(MQTT_TOPIC, payload.c_str());
-    lastPublishTime = millis();
-    Serial.print("Published: ");
-    Serial.print(payload);
-    Serial.print(" - ");
-    Serial.print(lastPublishTime);
-    Serial.println("ms");
-  }
-  else
-  {
-    // Dummy payload to indicate no GPS fix
-    String payload = "{\"id\": \"" + String(macAddress) + "\", \"lat\": 0, \"long\": 0}";
-    mqttClient.publish(MQTT_TOPIC, payload.c_str());
-    lastPublishTime = millis();
-    Serial.print("Published: ");
-    Serial.print(payload);
-    Serial.print(" - ");
-    Serial.print(lastPublishTime);
-    Serial.println("ms");
-  }
-}
-
-void onMqttConnect(bool sessionPresent)
-{
-  Serial.println("Success!");
-}
-
-void connectWifi()
-{
-  Serial.print("Connecting to WiFi...");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(1000);
-    Serial.print(".");
-  }
-  Serial.println("Success!");
-}
-
-void getMacAddress()
-{
-  uint8_t mac[6];
-  WiFi.macAddress(mac);
-  snprintf(macAddress, sizeof(macAddress), "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  Serial.print("MAC Address: ");
-  Serial.println(macAddress);
+  // Add delay to prevent overloading the serial buffer
+  delay(100);
 }
