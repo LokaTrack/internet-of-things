@@ -38,6 +38,7 @@ This repository hosts the source code for the LokaTrack IoT project. This projec
 - Libraries:
   - [TinyGPS++](https://github.com/mikalhart/TinyGPSPlus?utm_source=platformio&utm_medium=piohome) (for GPS data parsing)
   - [PubSubClient](https://github.com/knolleary/pubsubclient?utm_source=platformio&utm_medium=piohome) (for MQTT communication)
+  - [ArduinoJson](https://github.com/bblanchon/ArduinoJson?utm_source=platformio&utm_medium=piohome) (for JSON data formatting
 
 ## Installation
 
@@ -116,8 +117,21 @@ After uploading the code to your ESP32, the device will:
 3. Connect to the MQTT broker using the configured security settings
 4. Begin reading GPS data and publishing it to the MQTT topic every 5 seconds
 
-The device will automatically reconnect to WiFi and the MQTT broker if the connection is lost.
+The device will automatically reconnect to WiFi and the MQTT broker if the connection is lost. The GPS data will be published as a JSON string with the following format:
+
+```json
+{
+  "id": "MAC_ADDRESS",
+  "lat": LATITUDE,
+  "long": LONGITUDE,
+  "satellites": SATELLITES
+}
+```
 
 ## License
 
 [Add your license information here]
+
+```
+
+```
