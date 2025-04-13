@@ -2,6 +2,7 @@
 #include <TinyGPSPlus.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <ArduinoJson.h>
 #include "config.h"
 
 // Only include WiFiClientSecure if MQTT_SSL is defined
@@ -114,38 +115,49 @@ void loop()
 
   publishGpsData();
 
-  // Serial.print("Satellites: ");
-  // Serial.println(gps.satellites.value());
-  // lastPublishTime = millis();
-
   delay(1000);
 }
 
 void publishGpsData()
 {
+  Serial.print("Number of satellites: ");
+  Serial.println(gps.satellites.value());
+
+  // Create JSON document
+  JsonDocument doc;
+
+  // Add device ID
+  doc["id"] = macAddress;
+
+  // Add GPS data
   if (gps.location.isValid())
   {
-    String payload = "{\"id\": \"" + String(macAddress) + "\", \"lat\": " + String(gps.location.lat(), 6) + ", \"long\": " + String(gps.location.lng(), 6) + "}";
-    mqttClient.publish(MQTT_TOPIC, payload.c_str());
-    lastPublishTime = millis();
-    Serial.print("Published: ");
-    Serial.print(payload);
-    Serial.print(" - ");
-    Serial.print(lastPublishTime);
-    Serial.println("ms");
+    doc["lat"] = gps.location.lat();
+    doc["long"] = gps.location.lng();
   }
   else
   {
-    // Dummy payload to indicate no GPS fix
-    String payload = "{\"id\": \"" + String(macAddress) + "\", \"lat\": 0, \"long\": 0}";
-    mqttClient.publish(MQTT_TOPIC, payload.c_str());
-    lastPublishTime = millis();
-    Serial.print("Published: ");
-    Serial.print(payload);
-    Serial.print(" - ");
-    Serial.print(lastPublishTime);
-    Serial.println("ms");
+    doc["lat"] = 0;
+    doc["long"] = 0;
   }
+
+  // Add satellites data
+  doc["satellites"] = gps.satellites.value();
+
+  // Serialize JSON to string
+  char buffer[256];
+  serializeJson(doc, buffer);
+
+  // Publish to MQTT
+  mqttClient.publish(MQTT_TOPIC, buffer);
+  lastPublishTime = millis();
+
+  // Debug output
+  Serial.print("Published: ");
+  Serial.print(buffer);
+  Serial.print(" - ");
+  Serial.print(lastPublishTime);
+  Serial.println("ms");
 }
 
 void onMqttConnect(bool sessionPresent)
