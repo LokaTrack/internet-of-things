@@ -1,34 +1,33 @@
 #include <Arduino.h>
-#include <TinyGPSPlus.h>
+#include <TinyGPSPlus.h> // Re-added GPS library
+// Define the modem type before including TinyGsmClient.h
+#define TINY_GSM_MODEM_SIM800
+#include <TinyGsmClient.h>
 #include <PubSubClient.h>
-#include <WiFi.h>
 #include <ArduinoJson.h>
 #include "config.h"
 
-// Only include WiFiClientSecure if MQTT_SSL is defined
-#ifdef MQTT_SSL
-#include <WiFiClientSecure.h>
-#endif
-
+// GPS Setup - Re-added
 TinyGPSPlus gps;
-HardwareSerial gpsSerial(2);
+HardwareSerial gpsSerial(2); // Use Serial2 for GPS
 
-// Create either a secure or non-secure WiFi client based on MQTT_SSL
+// GSM Modem Setup
+HardwareSerial SerialAT(1); // Use Serial1 for AT commands
+TinyGsm modem(SerialAT);
+
+// MQTT Client Setup
+// Create either a secure or non-secure GSM client based on MQTT_SSL
 #ifdef MQTT_SSL
-WiFiClientSecure wifiClient;
+TinyGsmClientSecure gsmClient(modem);
 #else
-WiFiClient wifiClient;
+TinyGsmClient gsmClient(modem);
 #endif
-
-PubSubClient mqttClient(wifiClient);
+PubSubClient mqttClient(gsmClient);
 
 uint32_t lastPublishTime = 0;
-char macAddress[18];
 
 void publishGpsData();
-void onMqttConnect(bool sessionPresent);
-void connectWifi();
-void getMacAddress();
+void connectGprs();
 
 void setup()
 {
@@ -42,82 +41,126 @@ void setup()
   }
   Serial.println("Success!");
 
-  // Initialize GPS module on Serial2
+  // Initialize GPS module on Serial2 - Re-added
   Serial.print("Initializing GPS Serial...");
-  try
-  {
-    gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
-  }
-  catch (const std::exception &e)
-  {
-    Serial.println("Failed!");
-    Serial.println(e.what());
+  gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+  Serial.println("Success!"); // Assuming success if no exception
+
+  // Initialize GSM Module on Serial1
+  Serial.print("Initializing GSM Serial...");
+  SerialAT.begin(GSM_BAUD, SERIAL_8N1, GSM_RX_PIN, GSM_TX_PIN);
+  delay(3000); // Delay for modem stabilization
+  Serial.println("Success!");
+
+  Serial.print("Initializing modem...");
+  if (!modem.init())
+  { // Use init() instead of restart() for initial setup
+    Serial.println("Failed to init modem, restarting...");
+    modem.restart(); // Attempt restart if init fails
+                     // Consider adding a check here if restart also fails
   }
   Serial.println("Success!");
 
-  connectWifi();
-  getMacAddress();
+  connectGprs(); // Connect to GPRS
 
   Serial.print("Initializing MQTT client...");
 
-  try
-  {
-    // Configure SSL only if MQTT_SSL is defined
+  // Configure SSL only if MQTT_SSL is defined
 #ifdef MQTT_SSL
 #ifdef MQTT_INSECURE
-    wifiClient.setInsecure(); // Skip certificate verification
+  // gsmClient.setInsecure(); // Removed: TinyGsmClientSecure doesn't have this method.
+  // Serial.println(" (using SSL - Insecure)"); // Comment adjusted
+  Serial.println(" (using SSL - Insecure flag set, but modem handles verification)");
 #else
-    wifiClient.setCACert(MQTT_CA_CERT); // Use CA certificate for verification
+  // Note: TinyGSM doesn't directly support CA certs like WiFiClientSecure.
+  // SSL/TLS is handled by the modem's firmware.
+  // Ensure your modem firmware supports the necessary TLS features and ciphers.
+  // setCACert is not available for TinyGsmClientSecure.
+  Serial.println(" (using SSL - Secure - Modem handles verification)");
 #endif
-    Serial.println(" (using SSL)");
 #else
-    Serial.println(" (not using SSL)");
+  Serial.println(" (not using SSL)");
 #endif
 
-    mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
-  }
-  catch (const std::exception &e)
-  {
-    Serial.println("Failed!");
-    Serial.println(e.what());
-  }
+  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+
   Serial.println("Success!");
 
-  Serial.print("Connecting to MQTT broker...");
-  mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
-  while (!mqttClient.connected())
+  // Connect to MQTT broker - moved to loop to handle reconnections robustly
+}
+
+void connectGprs()
+{
+  Serial.print("Connecting to GPRS network...");
+  if (!modem.waitForNetwork())
   {
-    mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
-    delay(1000);
-    Serial.print(".");
+    Serial.println(" Network failed!");
+    delay(10000);
+    return;
   }
-  Serial.println("Success!");
+  Serial.println(" Network success!");
+
+  Serial.print("Connecting to APN: ");
+  Serial.print(apn);
+  if (!modem.gprsConnect(apn, user, pass))
+  {
+    Serial.println(" APN failed!");
+    delay(10000);
+    return;
+  }
+  Serial.println(" APN success!");
 }
 
 void loop()
 {
-  if (!mqttClient.connected())
+  // Ensure GPRS is connected
+  if (!modem.isGprsConnected())
   {
-    Serial.println("Reconnecting to MQTT broker...");
-    mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
-    return;
+    Serial.println("GPRS disconnected. Reconnecting...");
+    connectGprs();
+    // If GPRS reconnects, MQTT will attempt to reconnect below
   }
 
-  if (millis() - lastPublishTime < 5000)
+  // Ensure MQTT is connected
+  if (modem.isGprsConnected() && !mqttClient.connected())
   {
-    return;
+    Serial.print("Connecting to MQTT broker...");
+    if (mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD))
+    {
+      Serial.println("Success!");
+      // Optional: Subscribe to topics here if needed
+      // mqttClient.subscribe("your/topic");
+    }
+    else
+    {
+      Serial.print("Failed! rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" Retrying in 5 seconds...");
+      delay(5000); // Wait before retrying MQTT connection
+    }
+    return; // Return to avoid publishing immediately after connection attempt
   }
 
+  // Maintain MQTT connection
+  mqttClient.loop();
+
+  // Read GPS data - Re-added
   while (gpsSerial.available() > 0)
   {
     gps.encode(gpsSerial.read());
   }
 
-  publishGpsData();
+  // Publish data periodically only if MQTT is connected
+  if (mqttClient.connected() && (millis() - lastPublishTime > 5000)) // Publish every 5 seconds
+  {
+    publishGpsData();
+  }
 
-  delay(1000);
+  // Small delay to prevent busy-waiting
+  delay(10);
 }
 
+// Reverted publishGpsData function (using MQTT_CLIENT_ID for id)
 void publishGpsData()
 {
   Serial.print("Number of satellites: ");
@@ -126,8 +169,8 @@ void publishGpsData()
   // Create JSON document
   JsonDocument doc;
 
-  // Add device ID
-  doc["id"] = macAddress;
+  // Add device ID using MQTT_CLIENT_ID from config.h
+  doc["id"] = MQTT_CLIENT_ID;
 
   // Add GPS data
   if (gps.location.isValid())
@@ -144,44 +187,50 @@ void publishGpsData()
   // Add satellites data
   doc["satellites"] = gps.satellites.value();
 
+  // Add HDOP (Horizontal Dilution of Precision) if available
+  if (gps.hdop.isValid())
+  {
+    doc["hdop"] = gps.hdop.hdop();
+  }
+  else
+  {
+    doc["hdop"] = 0;
+  }
+
+  // Add Altitude if available
+  if (gps.altitude.isValid())
+  {
+    doc["alt"] = gps.altitude.meters();
+  }
+  else
+  {
+    doc["alt"] = 0;
+  }
+
+  // Add Speed if available
+  if (gps.speed.isValid())
+  {
+    doc["speed"] = gps.speed.kmph();
+  }
+  else
+  {
+    doc["speed"] = 0;
+  }
+
   // Serialize JSON to string
   char buffer[256];
-  serializeJson(doc, buffer);
+  size_t n = serializeJson(doc, buffer);
 
   // Publish to MQTT
-  mqttClient.publish(MQTT_TOPIC, buffer);
-  lastPublishTime = millis();
-
-  // Debug output
-  Serial.print("Published: ");
-  Serial.print(buffer);
-  Serial.print(" - ");
-  Serial.print(lastPublishTime);
-  Serial.println("ms");
-}
-
-void onMqttConnect(bool sessionPresent)
-{
-  Serial.println("Success!");
-}
-
-void connectWifi()
-{
-  Serial.print("Connecting to WiFi...");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED)
+  Serial.print("Publishing: ");
+  Serial.println(buffer);
+  if (mqttClient.publish(MQTT_TOPIC, buffer, n))
   {
-    delay(1000);
-    Serial.print(".");
+    lastPublishTime = millis();
+    Serial.println("Publish Success!");
   }
-  Serial.println("Success!");
-}
-
-void getMacAddress()
-{
-  uint8_t mac[6];
-  WiFi.macAddress(mac);
-  snprintf(macAddress, sizeof(macAddress), "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  Serial.print("MAC Address: ");
-  Serial.println(macAddress);
+  else
+  {
+    Serial.println("Publish Failed!");
+  }
 }
