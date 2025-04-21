@@ -1,19 +1,18 @@
+#include "config.h"
+
 #include <Arduino.h>
-#include <TinyGPSPlus.h> // Re-added GPS library
-// Define the modem type before including TinyGsmClient.h
-#define TINY_GSM_MODEM_SIM800
+#include <TinyGPSPlus.h>
 #include <TinyGsmClient.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
-#include "config.h"
 
-// GPS Setup - Re-added
+// GPS Setup
 TinyGPSPlus gps;
 HardwareSerial gpsSerial(2); // Use Serial2 for GPS
 
 // GSM Modem Setup
-HardwareSerial SerialAT(1); // Use Serial1 for AT commands
-TinyGsm modem(SerialAT);
+HardwareSerial gsmAtSerial(1); // Use Serial1 for AT commands
+TinyGsm modem(gsmAtSerial);
 
 // MQTT Client Setup
 // Create either a secure or non-secure GSM client based on MQTT_SSL
@@ -48,7 +47,7 @@ void setup()
 
   // Initialize GSM Module on Serial1
   Serial.print("Initializing GSM Serial...");
-  SerialAT.begin(GSM_BAUD, SERIAL_8N1, GSM_RX_PIN, GSM_TX_PIN);
+  gsmAtSerial.begin(GSM_BAUD, SERIAL_8N1, GSM_RX_PIN, GSM_TX_PIN);
   delay(3000); // Delay for modem stabilization
   Serial.println("Success!");
 
