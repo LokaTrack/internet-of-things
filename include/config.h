@@ -49,11 +49,12 @@ CAUw7C29C79Fv1C5qfPrmAESrciIxpg0X40KPMbp1ZWVbd4=
 #define WIFI_PASSWORD "Q15062009"
 
 // GSM modem settings
-const char apn[] = "internet"; // Your carrier's APN
-const char user[] = "wap";     // APN username if needed
-const char pass[] = "123wap";  // APN password if needed
+const char APN[] = "internet";        // Your carrier's APN
+const char APN_USER[] = "wap";        // APN username if needed
+const char APN_PASSWORD[] = "123wap"; // APN password if needed
 
 // Library and configuration settings
+#define HWID "lokatrack-gps-1"
 #define TINY_GSM_MODEM_SIM800
 // #define MQTT_SSL
 // #define MQTT_INSECURE

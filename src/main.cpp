@@ -8,14 +8,13 @@
 
 // GPS Setup
 TinyGPSPlus gps;
-HardwareSerial gpsSerial(2); // Use Serial2 for GPS
+HardwareSerial gpsSerial(2); // Use Serial2 as `gpsSerial` for GPS
 
 // GSM Modem Setup
-HardwareSerial gsmAtSerial(1); // Use Serial1 for AT commands
+HardwareSerial gsmAtSerial(1); // Use Serial1 as `gsmAtSerial` for AT commands
 TinyGsm modem(gsmAtSerial);
 
 // MQTT Client Setup
-// Create either a secure or non-secure GSM client based on MQTT_SSL
 #ifdef MQTT_SSL
 TinyGsmClientSecure gsmClient(modem);
 #else
@@ -40,12 +39,12 @@ void setup()
   }
   Serial.println("Success!");
 
-  // Initialize GPS module on Serial2 - Re-added
+  // Initialize GPS module on gpsSerial
   Serial.print("Initializing GPS Serial...");
   gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
-  Serial.println("Success!"); // Assuming success if no exception
+  Serial.println("Success!");
 
-  // Initialize GSM Module on Serial1
+  // Initialize GSM Module on gsmAtSerial
   Serial.print("Initializing GSM Serial...");
   gsmAtSerial.begin(GSM_BAUD, SERIAL_8N1, GSM_RX_PIN, GSM_TX_PIN);
   delay(3000); // Delay for modem stabilization
@@ -54,7 +53,8 @@ void setup()
   Serial.print("Initializing modem...");
   if (!modem.init())
   { // Use init() instead of restart() for initial setup
-    Serial.println("Failed to init modem, restarting...");
+    Serial.println("Failed!");
+    Serial.print("Restarting modem...");
     modem.restart(); // Attempt restart if init fails
                      // Consider adding a check here if restart also fails
   }
@@ -63,29 +63,62 @@ void setup()
   connectGprs(); // Connect to GPRS
 
   Serial.print("Initializing MQTT client...");
-
-  // Configure SSL only if MQTT_SSL is defined
+  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
 #ifdef MQTT_SSL
 #ifdef MQTT_INSECURE
   // gsmClient.setInsecure(); // Removed: TinyGsmClientSecure doesn't have this method.
   // Serial.println(" (using SSL - Insecure)"); // Comment adjusted
-  Serial.println(" (using SSL - Insecure flag set, but modem handles verification)");
+  Serial.println("Sucess! (using SSL - Insecure)");
 #else
   // Note: TinyGSM doesn't directly support CA certs like WiFiClientSecure.
   // SSL/TLS is handled by the modem's firmware.
   // Ensure your modem firmware supports the necessary TLS features and ciphers.
   // setCACert is not available for TinyGsmClientSecure.
-  Serial.println(" (using SSL - Secure - Modem handles verification)");
+  Serial.println("Sucess! (using SSL - Secure)");
 #endif
 #else
-  Serial.println(" (not using SSL)");
+  Serial.println("Success! (using non-SSL)");
 #endif
+}
 
-  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+void loop()
+{
+  if (!modem.isGprsConnected())
+  {
+    Serial.println("GPRS disconnected. Reconnecting...");
+    connectGprs();
+    return;
+  }
 
-  Serial.println("Success!");
+  if (!mqttClient.connected())
+  {
+    Serial.print("Connecting to MQTT broker...");
+    if (mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD))
+    {
+      Serial.println("Success!");
+    }
+    else
+    {
+      Serial.print("Failed! Error code: ");
+      Serial.print(mqttClient.state());
+      Serial.println(", Retrying in 5 seconds...");
+      delay(5000); // Wait before retrying MQTT connection
+    }
+    return; // Return to avoid publishing immediately after connection attempt
+  }
+  mqttClient.loop();
 
-  // Connect to MQTT broker - moved to loop to handle reconnections robustly
+  while (gpsSerial.available() > 0)
+  {
+    gps.encode(gpsSerial.read());
+  }
+
+  if (mqttClient.connected() && (millis() - lastPublishTime > 5000))
+  {
+    publishGpsData();
+  }
+
+  delay(10);
 }
 
 void connectGprs()
@@ -93,73 +126,24 @@ void connectGprs()
   Serial.print("Connecting to GPRS network...");
   if (!modem.waitForNetwork())
   {
-    Serial.println(" Network failed!");
+    Serial.println("Failed!");
     delay(10000);
     return;
   }
-  Serial.println(" Network success!");
+  Serial.println("Success!");
 
   Serial.print("Connecting to APN: ");
-  Serial.print(apn);
-  if (!modem.gprsConnect(apn, user, pass))
+  Serial.print(APN);
+  Serial.print("...");
+  if (!modem.gprsConnect(APN, APN_USER, APN_PASSWORD))
   {
-    Serial.println(" APN failed!");
+    Serial.println("Failed!");
     delay(10000);
     return;
   }
-  Serial.println(" APN success!");
+  Serial.println("Success!");
 }
 
-void loop()
-{
-  // Ensure GPRS is connected
-  if (!modem.isGprsConnected())
-  {
-    Serial.println("GPRS disconnected. Reconnecting...");
-    connectGprs();
-    // If GPRS reconnects, MQTT will attempt to reconnect below
-  }
-
-  // Ensure MQTT is connected
-  if (modem.isGprsConnected() && !mqttClient.connected())
-  {
-    Serial.print("Connecting to MQTT broker...");
-    if (mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD))
-    {
-      Serial.println("Success!");
-      // Optional: Subscribe to topics here if needed
-      // mqttClient.subscribe("your/topic");
-    }
-    else
-    {
-      Serial.print("Failed! rc=");
-      Serial.print(mqttClient.state());
-      Serial.println(" Retrying in 5 seconds...");
-      delay(5000); // Wait before retrying MQTT connection
-    }
-    return; // Return to avoid publishing immediately after connection attempt
-  }
-
-  // Maintain MQTT connection
-  mqttClient.loop();
-
-  // Read GPS data - Re-added
-  while (gpsSerial.available() > 0)
-  {
-    gps.encode(gpsSerial.read());
-  }
-
-  // Publish data periodically only if MQTT is connected
-  if (mqttClient.connected() && (millis() - lastPublishTime > 5000)) // Publish every 5 seconds
-  {
-    publishGpsData();
-  }
-
-  // Small delay to prevent busy-waiting
-  delay(10);
-}
-
-// Reverted publishGpsData function (using MQTT_CLIENT_ID for id)
 void publishGpsData()
 {
   Serial.print("Number of satellites: ");
@@ -169,7 +153,7 @@ void publishGpsData()
   JsonDocument doc;
 
   // Add device ID using MQTT_CLIENT_ID from config.h
-  doc["id"] = MQTT_CLIENT_ID;
+  doc["id"] = HWID;
 
   // Add GPS data
   if (gps.location.isValid())
@@ -179,41 +163,41 @@ void publishGpsData()
   }
   else
   {
-    doc["lat"] = 0;
-    doc["long"] = 0;
+    doc["lat"] = nullptr;
+    doc["long"] = nullptr;
   }
 
   // Add satellites data
   doc["satellites"] = gps.satellites.value();
 
-  // Add HDOP (Horizontal Dilution of Precision) if available
+  // Add HDOP (Horizontal Dilution of Precision) data
   if (gps.hdop.isValid())
   {
     doc["hdop"] = gps.hdop.hdop();
   }
   else
   {
-    doc["hdop"] = 0;
+    doc["hdop"] = nullptr;
   }
 
-  // Add Altitude if available
+  // Add altitude data
   if (gps.altitude.isValid())
   {
     doc["alt"] = gps.altitude.meters();
   }
   else
   {
-    doc["alt"] = 0;
+    doc["alt"] = nullptr;
   }
 
-  // Add Speed if available
+  // Add speed data
   if (gps.speed.isValid())
   {
     doc["speed"] = gps.speed.kmph();
   }
   else
   {
-    doc["speed"] = 0;
+    doc["speed"] = nullptr;
   }
 
   // Serialize JSON to string
@@ -222,14 +206,20 @@ void publishGpsData()
 
   // Publish to MQTT
   Serial.print("Publishing: ");
-  Serial.println(buffer);
+  Serial.print(buffer);
   if (mqttClient.publish(MQTT_TOPIC, buffer, n))
   {
+    Serial.print(" - ");
+    Serial.print(millis());
+    Serial.print(" ms...");
     lastPublishTime = millis();
-    Serial.println("Publish Success!");
+    Serial.println("Success!");
   }
   else
   {
-    Serial.println("Publish Failed!");
+    Serial.print(" - ");
+    Serial.print(millis());
+    Serial.print(" ms...");
+    Serial.println("Failed!");
   }
 }
