@@ -7,21 +7,19 @@
 #define GPS_BAUD 9600
 
 // SIM800L pins
-#define GSM_RX_PIN 32 // Connect to TX of SIM800L module
-#define GSM_TX_PIN 33 // Connect to RX of SIM800L module
+#define GSM_RX_PIN 32  // Connect to TX of SIM800L module
+#define GSM_TX_PIN 33  // Connect to RX of SIM800L module
+#define GSM_RST_PIN 12 // Connect to RST of SIM800L module
 #define GSM_BAUD 9600
 
 // MQTT Broker settings
-#define MQTT_BROKER "u7015b42.ala.asia-southeast1.emqxsl.com"
+#define MQTT_BROKER "broker.emqx.io"
 #define MQTT_TOPIC "lokatrack/gps"
-#define MQTT_PORT 8883
+#define MQTT_PORT 1883
 #define MQTT_CLIENT_ID "lokatrack-gps-1"
 #define MQTT_USERNAME "lokatrack-gps-1"
 #define MQTT_PASSWORD "lokatrack"
-#define MQTT_SSL
-#define MQTT_INSECURE
-
-const char MQTT_CA_CERT[] PROGMEM = R"EOF(
+const char *MQTT_CA_CERT = R"EOF(
 -----BEGIN CERTIFICATE-----
 MIIDrzCCApegAwIBAgIQCDvgVpBCRrGhdWrJWZHHSjANBgkqhkiG9w0BAQUFADBh
 MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3
@@ -49,5 +47,16 @@ CAUw7C29C79Fv1C5qfPrmAESrciIxpg0X40KPMbp1ZWVbd4=
 // WiFi settings
 #define WIFI_SSID "QUEENFAM"
 #define WIFI_PASSWORD "Q15062009"
+
+// GSM modem settings
+const char APN[] = "internet";        // Your carrier's APN
+const char APN_USER[] = "wap";        // APN username if needed
+const char APN_PASSWORD[] = "123wap"; // APN password if needed
+
+// Library and configuration settings
+#define HWID "lokatrack-gps-1"
+#define TINY_GSM_MODEM_SIM800
+// #define MQTT_SSL
+// #define MQTT_INSECURE
 
 #endif
