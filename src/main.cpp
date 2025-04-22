@@ -153,7 +153,7 @@ void publishGpsData()
   JsonDocument doc;
 
   // Add device ID using MQTT_CLIENT_ID from config.h
-  doc["id"] = HWID;
+  doc["id"] = MQTT_CLIENT_ID;
 
   // Add GPS data
   if (gps.location.isValid())

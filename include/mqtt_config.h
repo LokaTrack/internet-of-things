@@ -1,18 +1,7 @@
-#ifndef CONFIG_H
-#define CONFIG_H
+#if !defined(MQTT_CONFIG_H)
+#define MQTT_CONFIG_H)
 
-// GPS Neo6M pins
-#define GPS_RX_PIN 25 // Connect to TX of GPS module
-#define GPS_TX_PIN 26 // Connect to RX of GPS module
-#define GPS_BAUD 9600
-
-// SIM800L pins
-#define GSM_RX_PIN 32  // Connect to TX of SIM800L module
-#define GSM_TX_PIN 33  // Connect to RX of SIM800L module
-#define GSM_RST_PIN 12 // Connect to RST of SIM800L module
-#define GSM_BAUD 9600
-
-// MQTT Broker settings
+// MQTT broker connection settings
 #define MQTT_BROKER "broker.emqx.io"
 #define MQTT_TOPIC "lokatrack/gps"
 #define MQTT_PORT 1883
@@ -44,19 +33,4 @@ CAUw7C29C79Fv1C5qfPrmAESrciIxpg0X40KPMbp1ZWVbd4=
 -----END CERTIFICATE-----
 )EOF";
 
-// WiFi settings
-#define WIFI_SSID "QUEENFAM"
-#define WIFI_PASSWORD "Q15062009"
-
-// GSM modem settings
-const char APN[] = "internet";        // Your carrier's APN
-const char APN_USER[] = "wap";        // APN username if needed
-const char APN_PASSWORD[] = "123wap"; // APN password if needed
-
-// Library and configuration settings
-#define HWID "lokatrack-gps-1"
-#define TINY_GSM_MODEM_SIM800
-// #define MQTT_SSL
-// #define MQTT_INSECURE
-
-#endif
+#endif // MQTT_CONFIG_H)
