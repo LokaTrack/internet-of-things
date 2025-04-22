@@ -204,6 +204,12 @@ void publishGpsData()
     doc["speed"] = nullptr;
   }
 
+#ifdef USE_DUMMY_GPS_DATA
+  doc["dummy"] = true;
+#else
+  doc["dummy"] = false;
+#endif
+
   // Serialize JSON to string
   char buffer[256];
   size_t n = serializeJson(doc, buffer);
