@@ -1,4 +1,8 @@
-#include "config.h"
+#include "app_config.h"
+#include "modem_config.h"
+#include "mqtt_config.h"
+#include "pins_config.h"
+#include "wifi_config.h"
 
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
