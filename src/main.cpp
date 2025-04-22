@@ -21,7 +21,7 @@ bool stringComplete = false; // Flag for completed command
 void setup()
 {
   // Initialize serial ports
-  SerialMon.begin(115200);
+  SerialMon.begin(9600);
   SerialAT.begin(GSM_BAUD, SERIAL_8N1, GSM_RX_PIN, GSM_TX_PIN);
   // Reset the GSM module
   pinMode(GSM_RST_PIN, OUTPUT);
