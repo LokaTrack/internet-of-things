@@ -1,5 +1,5 @@
 #if !defined(PINS_CONFIG_H)
-#define PINS_CONFIG_H)
+#define PINS_CONFIG_H
 
 // GPS Neo6M pins
 #define GPS_RX_PIN 25 // Connect to TX of GPS module

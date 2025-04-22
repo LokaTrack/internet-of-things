@@ -1,4 +1,8 @@
-#include "config.h"
+#include "app_config.h"
+#include "modem_config.h"
+#include "mqtt_config.h"
+#include "pins_config.h"
+#include "wifi_config.h"
 
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
@@ -199,6 +203,12 @@ void publishGpsData()
   {
     doc["speed"] = nullptr;
   }
+
+#ifdef USE_DUMMY_GPS_DATA
+  doc["dummy"] = true;
+#else
+  doc["dummy"] = false;
+#endif
 
   // Serialize JSON to string
   char buffer[256];
