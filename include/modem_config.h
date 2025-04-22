@@ -1,5 +1,5 @@
 #if !defined(MODEM_CONFIG_H)
-#define MODEM_CONFIG_H)
+#define MODEM_CONFIG_H
 
 // GSM modem settings
 const char APN[] = "internet";        // Your carrier's APN

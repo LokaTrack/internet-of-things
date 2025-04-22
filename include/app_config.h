@@ -1,5 +1,5 @@
 #if !defined(APP_CONFIG_H)
-#define APP_CONFIG_H)
+#define APP_CONFIG_H
 
 // #define MQTT_SSL            // Uncomment to enable SSL
 // #define MQTT_INSECURE       // Uncomment to disable SSL certificate verification

@@ -1,5 +1,5 @@
 #if !defined(MQTT_CONFIG_H)
-#define MQTT_CONFIG_H)
+#define MQTT_CONFIG_H
 
 // MQTT broker connection settings
 #define MQTT_BROKER "broker.emqx.io"
