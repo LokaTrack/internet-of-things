@@ -3,7 +3,6 @@
 #include "mqtt_config.h"
 #include "pins_config.h"
 #include "wifi_config.h"
-#include "encrypt.h" // Include the encryption header
 
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
@@ -15,6 +14,7 @@
 #endif
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <ChaCha20.h> // Include the encryption header
 
 // GPS Setup
 TinyGPSPlus gps;
@@ -100,6 +100,7 @@ void setup()
 
   Serial.print("Initializing MQTT client...");
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  mqttClient.setBufferSize(1024); // Increase buffer size for large encrypted messages
 #ifdef MQTT_SSL
 #ifdef USE_WIFI_CONNECTION
 #ifdef MQTT_INSECURE
@@ -283,7 +284,7 @@ void publishGpsData()
   // Publish encrypted data to MQTT
   Serial.print("Publishing encrypted data (length: ");
   Serial.print(encryptedData.length());
-  Serial.println(" bytes)");
+  Serial.print(" bytes)");
 
   if (mqttClient.publish(MQTT_TOPIC, encryptedData.c_str()))
   {
