@@ -14,6 +14,7 @@
 #endif
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <ChaCha20.h> // Include the encryption header
 
 // GPS Setup
 TinyGPSPlus gps;
@@ -62,6 +63,14 @@ void setup()
   }
   Serial.println("Success!");
 
+  // Initialize the encryption system
+  Serial.print("Initializing ChaCha20 encryption...");
+  initChaCha();
+  Serial.println("Success!");
+
+  // Initialize random seed for secure IV generation
+  randomSeed(analogRead(0) + millis());
+
   // Initialize GPS module on gpsSerial
   Serial.print("Initializing GPS Serial...");
   gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
@@ -91,6 +100,7 @@ void setup()
 
   Serial.print("Initializing MQTT client...");
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  mqttClient.setBufferSize(1024); // Increase buffer size for large encrypted messages
 #ifdef MQTT_SSL
 #ifdef USE_WIFI_CONNECTION
 #ifdef MQTT_INSECURE
@@ -262,14 +272,21 @@ void publishGpsData()
   doc["dummy"] = false;
 #endif
 
-  // Serialize JSON to string
-  char buffer[256];
-  size_t n = serializeJson(doc, buffer);
+  // Get plain JSON for debug
+  String plainJson;
+  serializeJson(doc, plainJson);
+  Serial.print("Plain JSON: ");
+  Serial.println(plainJson);
 
-  // Publish to MQTT
-  Serial.print("Publishing: ");
-  Serial.print(buffer);
-  if (mqttClient.publish(MQTT_TOPIC, buffer, n))
+  // Encrypt the JSON document - this will automatically include IV and counter in the output
+  String encryptedData = encryptJson(doc);
+
+  // Publish encrypted data to MQTT
+  Serial.print("Publishing encrypted data (length: ");
+  Serial.print(encryptedData.length());
+  Serial.print(" bytes)");
+
+  if (mqttClient.publish(MQTT_TOPIC, encryptedData.c_str()))
   {
     Serial.print(" - ");
     Serial.print(millis());
