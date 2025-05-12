@@ -6,30 +6,50 @@
 
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
+#ifdef USE_WIFI_CONNECTION
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#else
 #include <TinyGsmClient.h>
+#endif
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <ChaCha20.h> // Include the encryption header
 
 // GPS Setup
 TinyGPSPlus gps;
 HardwareSerial gpsSerial(2); // Use Serial2 as `gpsSerial` for GPS
 
+#ifndef USE_WIFI_CONNECTION
 // GSM Modem Setup
 HardwareSerial gsmAtSerial(1); // Use Serial1 as `gsmAtSerial` for AT commands
 TinyGsm modem(gsmAtSerial);
+#endif
 
 // MQTT Client Setup
+#ifdef USE_WIFI_CONNECTION
+#ifdef MQTT_SSL
+WiFiClientSecure wifiClient;
+#else
+WiFiClient wifiClient;
+#endif
+PubSubClient mqttClient(wifiClient);
+#else
 #ifdef MQTT_SSL
 TinyGsmClientSecure gsmClient(modem);
 #else
 TinyGsmClient gsmClient(modem);
 #endif
 PubSubClient mqttClient(gsmClient);
+#endif
 
 uint32_t lastPublishTime = 0;
 
 void publishGpsData();
+#ifndef USE_WIFI_CONNECTION
 void connectGprs();
+#endif
+void connectWifi();
 
 void setup()
 {
@@ -43,11 +63,20 @@ void setup()
   }
   Serial.println("Success!");
 
+  // Initialize the encryption system
+  Serial.print("Initializing ChaCha20 encryption...");
+  initChaCha();
+  Serial.println("Success!");
+
+  // Initialize random seed for secure IV generation
+  randomSeed(analogRead(0) + millis());
+
   // Initialize GPS module on gpsSerial
   Serial.print("Initializing GPS Serial...");
   gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
   Serial.println("Success!");
 
+#ifndef USE_WIFI_CONNECTION
   // Initialize GSM Module on gsmAtSerial
   Serial.print("Initializing GSM Serial...");
   gsmAtSerial.begin(GSM_BAUD, SERIAL_8N1, GSM_RX_PIN, GSM_TX_PIN);
@@ -60,25 +89,33 @@ void setup()
     Serial.println("Failed!");
     Serial.print("Restarting modem...");
     modem.restart(); // Attempt restart if init fails
-                     // Consider adding a check here if restart also fails
+    // Consider adding a check here if restart also fails
   }
   Serial.println("Success!");
 
   connectGprs(); // Connect to GPRS
+#else
+  connectWifi(); // Connect to WiFi
+#endif
 
   Serial.print("Initializing MQTT client...");
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  mqttClient.setBufferSize(1024); // Increase buffer size for large encrypted messages
 #ifdef MQTT_SSL
+#ifdef USE_WIFI_CONNECTION
 #ifdef MQTT_INSECURE
-  // gsmClient.setInsecure(); // Removed: TinyGsmClientSecure doesn't have this method.
-  // Serial.println(" (using SSL - Insecure)"); // Comment adjusted
-  Serial.println("Sucess! (using SSL - Insecure)");
+  wifiClient.setInsecure(); // Skip certificate validation
+  Serial.println("Success! (using WiFi SSL - Insecure)");
 #else
-  // Note: TinyGSM doesn't directly support CA certs like WiFiClientSecure.
-  // SSL/TLS is handled by the modem's firmware.
-  // Ensure your modem firmware supports the necessary TLS features and ciphers.
-  // setCACert is not available for TinyGsmClientSecure.
-  Serial.println("Sucess! (using SSL - Secure)");
+  wifiClient.setCACert(MQTT_CA_CERT); // Set CA certificate for server validation
+  Serial.println("Success! (using WiFi SSL - Secure)");
+#endif
+#else
+#ifdef MQTT_INSECURE
+  Serial.println("Success! (using GSM SSL - Insecure)");
+#else
+  Serial.println("Success! (using GSM SSL - Secure)");
+#endif
 #endif
 #else
   Serial.println("Success! (using non-SSL)");
@@ -87,12 +124,21 @@ void setup()
 
 void loop()
 {
+#ifndef USE_WIFI_CONNECTION
   if (!modem.isGprsConnected())
   {
     Serial.println("GPRS disconnected. Reconnecting...");
     connectGprs();
     return;
   }
+#else
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("WiFi disconnected. Reconnecting...");
+    connectWifi();
+    return;
+  }
+#endif
 
   if (!mqttClient.connected())
   {
@@ -117,7 +163,7 @@ void loop()
     gps.encode(gpsSerial.read());
   }
 
-  if (mqttClient.connected() && (millis() - lastPublishTime > 5000))
+  if (mqttClient.connected() && (millis() - lastPublishTime > PUBLISH_INTERVAL))
   {
     publishGpsData();
   }
@@ -125,6 +171,7 @@ void loop()
   delay(10);
 }
 
+#ifndef USE_WIFI_CONNECTION
 void connectGprs()
 {
   Serial.print("Connecting to GPRS network...");
@@ -147,6 +194,21 @@ void connectGprs()
   }
   Serial.println("Success!");
 }
+#endif
+
+#ifdef USE_WIFI_CONNECTION
+void connectWifi()
+{
+  Serial.print("Connecting to WiFi...");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println("Success!");
+}
+#endif
 
 void publishGpsData()
 {
@@ -210,14 +272,21 @@ void publishGpsData()
   doc["dummy"] = false;
 #endif
 
-  // Serialize JSON to string
-  char buffer[256];
-  size_t n = serializeJson(doc, buffer);
+  // Get plain JSON for debug
+  String plainJson;
+  serializeJson(doc, plainJson);
+  Serial.print("Plain JSON: ");
+  Serial.println(plainJson);
 
-  // Publish to MQTT
-  Serial.print("Publishing: ");
-  Serial.print(buffer);
-  if (mqttClient.publish(MQTT_TOPIC, buffer, n))
+  // Encrypt the JSON document - this will automatically include IV and counter in the output
+  String encryptedData = encryptJson(doc);
+
+  // Publish encrypted data to MQTT
+  Serial.print("Publishing encrypted data (length: ");
+  Serial.print(encryptedData.length());
+  Serial.print(" bytes)");
+
+  if (mqttClient.publish(MQTT_TOPIC, encryptedData.c_str()))
   {
     Serial.print(" - ");
     Serial.print(millis());
