@@ -163,7 +163,7 @@ void loop()
     gps.encode(gpsSerial.read());
   }
 
-  if (mqttClient.connected() && (millis() - lastPublishTime > 5000))
+  if (mqttClient.connected() && (millis() - lastPublishTime > PUBLISH_INTERVAL))
   {
     publishGpsData();
   }
