@@ -10,6 +10,7 @@
 #ifdef USE_WIFI_CONNECTION
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <time.h> // Include for NTP functions
 #else
 #include <TinyGsmClient.h>
 #endif
@@ -50,12 +51,15 @@ PubSubClient mqttClient(gsmClient);
 
 uint32_t lastPublishTime = 0;
 
+String getCurrentUTCTime();
 void publishGpsData();
 #ifndef USE_WIFI_CONNECTION
 void connectGprs();
 void syncNtpTime();
-#endif
+#else
 void connectWifi();
+void syncNtpTime();
+#endif
 
 // NTP Time sync function for SIM800L
 #ifndef USE_WIFI_CONNECTION
@@ -183,6 +187,48 @@ void syncNtpTime()
     Serial.println("Failed to get time!");
   }
 }
+#else
+// NTP Time sync function for WiFi
+void syncNtpTime()
+{
+  Serial.print("Synchronizing time with NTP server: ");
+  Serial.print(NTP_SERVER);
+  Serial.print("...");
+
+  // Configure NTP server and timezone
+  configTime(GMT_OFFSET, DST_OFFSET, NTP_SERVER);
+
+  // Wait for time to be set
+  time_t now = 0;
+  struct tm timeinfo = {0};
+  int retry = 0;
+  const int retry_count = 10;
+
+  while (timeinfo.tm_year < (2022 - 1900) && ++retry < retry_count)
+  {
+    Serial.print(".");
+    delay(1000);
+    time(&now);
+    localtime_r(&now, &timeinfo);
+  }
+
+  if (retry < retry_count)
+  {
+    Serial.println("Success!");
+
+    // Set the ESP32 RTC
+    rtc.setTime(timeinfo.tm_sec, timeinfo.tm_min, timeinfo.tm_hour,
+                timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
+
+    Serial.print("Current time: ");
+    Serial.print(rtc.getTime("%Y-%m-%d %H:%M:%S"));
+    Serial.println(" UTC");
+  }
+  else
+  {
+    Serial.println("Failed to sync time!");
+  }
+}
 #endif
 
 void setup()
@@ -234,6 +280,10 @@ void setup()
   syncNtpTime();
 #else
   connectWifi(); // Connect to WiFi
+
+  // Synchronize time with NTP server
+  Serial.println("Synchronizing time with NTP server...");
+  syncNtpTime();
 #endif
 
   Serial.print("Initializing MQTT client...");
@@ -359,17 +409,8 @@ void publishGpsData()
   // Add device ID using MQTT_CLIENT_ID from config.h
   doc["id"] = MQTT_CLIENT_ID;
 
-  // Add timestamp with ISO 8601 format including milliseconds
-  // Format: YYYY-MM-DDThh:mm:ss.sssZ for UTC
-  String isoTimestamp = rtc.getTime("%Y-%m-%dT%H:%M:%S");
-  // Add milliseconds (approximate)
-  unsigned long msInThisSecond = millis() % 1000;
-  char msStr[5];
-  sprintf(msStr, ".%03lu", msInThisSecond);
-  isoTimestamp += msStr;
-  isoTimestamp += "Z"; // 'Z' indicates UTC timezone
-
-  doc["timestamp"] = isoTimestamp;
+  // Add timestamp from RTC
+  doc["timestamp"] = getCurrentUTCTime();
 
   // Add GPS data
   if (gps.location.isValid())
@@ -379,8 +420,8 @@ void publishGpsData()
   }
   else
   {
-    doc["lat"] = nullptr;
-    doc["long"] = nullptr;
+    doc["lat"] = 1;
+    doc["long"] = 0;
   }
 
   // Add satellites data
@@ -440,15 +481,33 @@ void publishGpsData()
   {
     Serial.print(" - ");
     Serial.print(millis());
-    Serial.print(" ms...");
-    lastPublishTime = millis();
+    Serial.print(" ms");
+    Serial.print(" - ");
+    Serial.print(getCurrentUTCTime());
+    Serial.print(" - ");
     Serial.println("Success!");
+    lastPublishTime = millis();
   }
   else
   {
     Serial.print(" - ");
     Serial.print(millis());
     Serial.print(" ms...");
+    Serial.print(" - ");
+    Serial.print(getCurrentUTCTime());
+    Serial.print(" - ");
     Serial.println("Failed!");
   }
+}
+
+String getCurrentUTCTime()
+{
+  String isoTimestamp = rtc.getTime("%Y-%m-%dT%H:%M:%S");
+  // Add milliseconds (approximate)
+  unsigned long msInThisSecond = millis() % 1000;
+  char msStr[5];
+  sprintf(msStr, ".%03lu", msInThisSecond);
+  isoTimestamp += msStr;
+  isoTimestamp += "Z"; // 'Z' indicates UTC timezone
+  return isoTimestamp;
 }
