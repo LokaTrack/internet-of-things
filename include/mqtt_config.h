@@ -2,7 +2,7 @@
 #define MQTT_CONFIG_H
 
 // MQTT broker connection settings
-#define MQTT_BROKER "broker.emqx.io"
+#define MQTT_BROKER "mqtt.quileon.me"
 #define MQTT_TOPIC "lokatrack/gps"
 #define MQTT_PORT 1883
 #define MQTT_CLIENT_ID "lokatrack-gps-1"
