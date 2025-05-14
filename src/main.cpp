@@ -420,8 +420,8 @@ void publishGpsData()
   }
   else
   {
-    doc["lat"] = 1;
-    doc["long"] = 0;
+    doc["lat"] = nullptr;
+    doc["long"] = nullptr;
   }
 
   // Add satellites data
