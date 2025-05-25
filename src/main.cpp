@@ -1,9 +1,15 @@
 #include "pins_config.h"
-#include <TinyGPS++.h>
 #include <HardwareSerial.h>
+#ifndef NO_TINYGPSPLUS
+#include <TinyGPS++.h>
+#endif
+
+// #define NO_TINYGPSPLUS
 
 // GPS objects
+#ifndef NO_TINYGPSPLUS
 TinyGPSPlus gps;
+#endif
 HardwareSerial gpsSerial(1); // Use UART1 for GPS
 
 void setup()
@@ -27,6 +33,18 @@ void loop()
   // Read GPS data
   while (gpsSerial.available() > 0)
   {
+#ifdef NO_TINYGPSPLUS
+    // Raw NMEA data reading without TinyGPS++
+    String gpsData = gpsSerial.readStringUntil('\n');
+
+    // Print raw NMEA sentences
+    if (gpsData.length() > 0)
+    {
+      Serial.print("GPS Data: ");
+      Serial.println(gpsData);
+    }
+#else
+    // Using TinyGPS++ library
     char c = gpsSerial.read();
 
     if (gps.encode(c))
@@ -78,12 +96,18 @@ void loop()
         delay(2000); // Print GPS data every 2 seconds when available
       }
     }
+#endif
   }
 
-  // Check if GPS is connected but no data
+#ifndef NO_TINYGPSPLUS
+  // Check if GPS is connected but no data (only when using TinyGPS++)
   if (millis() > 5000 && gps.charsProcessed() < 10)
   {
     Serial.println("No GPS data received: check wiring or GPS antenna");
     delay(5000);
   }
+#else
+  // Small delay to prevent overwhelming the serial output when using raw data
+  delay(100);
+#endif
 }
